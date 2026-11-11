@@ -2094,8 +2094,9 @@ class DebuggingVariable(VariableTracker):
             unimplemented(
                 gb_type="attempted to reorder a debugging function that can't actually be reordered",
                 context=f"fn: {self.value}, args: {args}, kwargs: {kwargs}",
-                explanation="`torch.compile` can only reorder functions where the arguments "
-                "are Tensors, constants, or string formatters.",
+                explanation="`torch.compile` can only reorder functions that are called "
+                "without keyword arguments and whose arguments are Tensors, constants, "
+                "or string formatters.",
                 hints=[
                     f"Avoid calling the logging function {self.value} with args that are not supported.",
                 ],
@@ -2118,13 +2119,17 @@ class DebuggingVariable(VariableTracker):
         actually reorder.
         """
 
+        # kwargs are dropped by the replay codegen, so refuse rather than lose them
+        if kwargs:
+            return False
+
         allowed_input_types = (
             variables.TensorVariable,
             variables.ConstantVariable,
             StringFormatVariable,
         )
 
-        flat_args = pytree.tree_leaves([args, kwargs])
+        flat_args = pytree.tree_leaves(args)
         for arg in flat_args:
             if not isinstance(arg, allowed_input_types):
                 return False
@@ -2191,12 +2196,21 @@ class LoggingLoggerVariable(VariableTracker):
         if method in ignore_set or function in ignore_set:
             return variables.ConstantVariable.create(None)
 
+        reorderable = torch._dynamo.config.reorderable_logging_functions
+        if self.source and (method in reorderable or function in reorderable):
+            fn_var = DebuggingVariable(method, source=AttrSource(self.source, name))
+            return fn_var.call_function(tx, args, kwargs)
+
         unimplemented(
             gb_type="logging.Logger method not supported for non-export cases",
             context=f"method: {self.value}.{name}, args: {args}, kwargs: {kwargs}",
-            explanation="logging.Logger methods are not supported for non-export cases.",
+            explanation="For non-export cases, logging.Logger methods are only supported if the logger "
+            "has a source and the method is registered as reorderable.",
             hints=[
                 "Add the logging method to `torch._dynamo.config.ignore_logging_functions`.",
+                "To preserve the log, create the logger outside the compiled region and add the "
+                "method to `torch._dynamo.config.reorderable_logging_functions`. "
+                "Reordering is only supported for calls without keyword arguments.",
             ],
         )
 
