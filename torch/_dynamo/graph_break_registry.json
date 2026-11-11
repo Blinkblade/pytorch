@@ -4253,6 +4253,15 @@
     {
       "Gb_type": "logging.Logger method not supported for non-export cases",
       "Context": "method: {self.value}.{name}, args: {args}, kwargs: {kwargs}",
+      "Explanation": "For non-export cases, logging.Logger methods are only supported if the logger has a source and the method is registered as reorderable.",
+      "Hints": [
+        "Add the logging method to `torch._dynamo.config.ignore_logging_functions`.",
+        "To preserve the log, create the logger outside the compiled region and add the method to `torch._dynamo.config.reorderable_logging_functions`. Reordering is only supported for calls without keyword arguments."
+      ]
+    },
+    {
+      "Gb_type": "logging.Logger method not supported for non-export cases",
+      "Context": "method: {self.value}.{name}, args: {args}, kwargs: {kwargs}",
       "Explanation": "logging.Logger methods are not supported for non-export cases.",
       "Hints": [
         "Add the logging method to `torch._dynamo.config.ignore_logging_functions`."
@@ -4308,6 +4317,14 @@
     }
   ],
   "GB0296": [
+    {
+      "Gb_type": "attempted to reorder a debugging function that can't actually be reordered",
+      "Context": "fn: {self.value}, args: {args}, kwargs: {kwargs}",
+      "Explanation": "`torch.compile` can only reorder functions that are called without keyword arguments and whose arguments are Tensors, constants, or string formatters.",
+      "Hints": [
+        "Avoid calling the logging function {self.value} with args that are not supported."
+      ]
+    },
     {
       "Gb_type": "attempted to reorder a debugging function that can't actually be reordered",
       "Context": "fn: {self.value}, args: {args}, kwargs: {kwargs}",
